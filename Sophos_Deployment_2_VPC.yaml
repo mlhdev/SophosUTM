@@ -1,0 +1,356 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Sophos UTM 9 AZ 1A. Version 1.2
+Parameters:
+  AMI:
+    Description: >-
+      Autodetect uses the latest AMI based on the pricing option you select.
+      Otherwise, specify an AMI ID.
+    Type: String
+    Default: autodetect
+  LicenseType:
+    Description: >-
+      Select between Bring Your Own License (BYOL) or pay per instance-hour
+      (Hourly). This parameter does not take effect if you manually enter an AMI
+      ID.
+    Type: String
+    AllowedValues:
+      - Hourly
+      - BYOL
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: ID of an existing VPC to launch the deployment in.
+  PrivateSubnetId:
+    Description: Subnet ID for private network interface.
+    Type: 'AWS::EC2::Subnet::Id'
+  PublicSubnetId:
+    Description: Subnet ID for public network interface.
+    Type: 'AWS::EC2::Subnet::Id'
+  PrivateNetworkCIDR:
+    Description: Allow all traffic from this CIDR on the private network interface.
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: >-
+      ^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: 'Must be IPv4 CIDR notation: X.X.X.X'
+#  PrimaryIpAddress:
+#    Description: Primary IP address for UTM
+#    Type: String
+#    AllowedPattern: >-
+#      ^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/([0-9]|[1-2][0-9]|3[0-2]))$
+#    ConstraintDescription: 'Must be IPv4 CIDR notation: X.X.X.X'    
+  PublicNetworkCIDR:
+    Description: >-
+      Allow all TCP traffic (except port 22 and 4444) from this CIDR on the
+      public network interface.
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: >-
+      ^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: 'Must be IPv4 CIDR notation: X.X.X.X/X'
+
+  OptTrustedNetworkCIDR:
+    Description: >-
+      Allow all traffic (including! TCP port 22 and 4444) from this CIDR on the
+      public network interface.
+    Type: String
+    Default: ''
+  InstanceSize:
+    Description: >-
+      The default EC2 instance type is m4.large. If m4.large is not available in
+      your region, a similar EC2 instance type will be used.
+    Type: String
+    Default: default
+  KeyName:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Name of an existing EC2 KeyPair to enable SSH access.
+  OptExistingElasticIpId:
+    Description: >-
+      Association ID of an existing Elastic IP. If no ID is specified a new
+      Elastic IP is created.
+    Type: String
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Instance Configuration
+        Parameters:
+          - AMI
+          - LicenseType
+          - InstanceSize
+      - Label:
+          default: Infrastructure Configuration
+        Parameters:
+          - VpcId
+          - PrivateSubnetId
+          - PublicSubnetId
+          - PrivateNetworkCIDR
+          - PublicNetworkCIDR
+          - OptExistingElasticIpId
+      - Label:
+          default: Access Permissions
+        Parameters:
+          - KeyName
+          - OptTrustedNetworkCIDR
+    ParameterLabels:
+      AMI:
+        default: AMI ID (required)
+      LicenseType:
+        default: Pricing Option (required)
+      InstanceSize:
+        default: Instance Type (required)
+      VpcId:
+        default: VPC ID (required)
+      PrivateSubnetId:
+        default: Private Subnet ID (required)
+      PublicSubnetId:
+        default: Public Subnet ID (required)
+      PrivateNetworkCIDR:
+        default: Private Network CIDR (required)
+      PublicNetworkCIDR:
+        default: Public Network CIDR (required)
+      OptExistingElasticIpId:
+        default: Existing Elastic IP ID (optional)
+      KeyName:
+        default: SSH Key (required)
+      OptTrustedNetworkCIDR:
+        default: Trusted Network CIDR (optional)
+Mappings:
+  RegionMap:
+    af-south-1:
+      Hourly: ''
+      BYOL: ''
+      ARN: aws
+      HAInstanceType: m4.large
+    ap-east-1:
+      Hourly: ''
+      BYOL: ''
+      ARN: aws
+      HAInstanceType: m4.large
+    ap-northeast-1:
+      Hourly: ami-014e30478809b25c7
+      BYOL: ami-06d454bd32ec7a0e0
+      ARN: aws
+      HAInstanceType: m4.large
+    ap-northeast-2:
+      Hourly: ami-04f850273de15e033
+      BYOL: ami-0e1a70dfcc48b25c4
+      ARN: aws
+      HAInstanceType: m4.large
+    ap-south-1:
+      Hourly: ami-06a5b0dbab15436bd
+      BYOL: ami-0e3f2af2e2ecb1853
+      ARN: aws
+      HAInstanceType: m4.large
+    ap-southeast-1:
+      Hourly: ami-0e302394863c5f1c0
+      BYOL: ami-04fd509f407c86a27
+      ARN: aws
+      HAInstanceType: m4.large
+    ap-southeast-2:
+      Hourly: ami-091d22b0991db0458
+      BYOL: ami-00d89e1bb01283ec2
+      ARN: aws
+      HAInstanceType: m4.large
+    ca-central-1:
+      Hourly: ami-0a63c47bcf758a98b
+      BYOL: ami-09ff27d03b10baa53
+      ARN: aws
+      HAInstanceType: m4.large
+    eu-central-1:
+      Hourly: ami-0ed08801eb1ced20e
+      BYOL: ami-0802d14484035b328
+      ARN: aws
+      HAInstanceType: m4.large
+    eu-north-1:
+      Hourly: ami-0450bfee084d9669b
+      BYOL: ami-0ae6605de6c1e50d3
+      ARN: aws
+      HAInstanceType: m5.large
+    eu-south-1:
+      Hourly: ''
+      BYOL: ''
+      ARN: aws
+      HAInstanceType: m4.large
+    eu-west-1:
+      Hourly: ami-03bcd8ecce33f026f
+      BYOL: ami-02860812c4bf75faa
+      ARN: aws
+      HAInstanceType: m4.large
+    eu-west-2:
+      Hourly: ami-029a74c3281b74de7
+      BYOL: ami-0ac38c62998f50cf3
+      ARN: aws
+      HAInstanceType: m4.large
+    eu-west-3:
+      Hourly: ami-0b38686d942fae96e
+      BYOL: ami-0839f3a989a99a4c9
+      ARN: aws
+      HAInstanceType: m5.large
+    me-south-1:
+      Hourly: ''
+      BYOL: ''
+      ARN: aws
+      HAInstanceType: m4.large
+    sa-east-1:
+      Hourly: ami-0a74f4a51cd81ac38
+      BYOL: ami-0dfdbf6e2bb38de57
+      ARN: aws
+      HAInstanceType: m3.medium
+    us-east-1:
+      Hourly: ami-05044553dd98dc31c
+      BYOL: ami-0d638337fcb23597a
+      ARN: aws
+      HAInstanceType: m4.large
+    us-east-2:
+      Hourly: ami-0a87195da03b6a0a5
+      BYOL: ami-0ed178266fc39effd
+      ARN: aws
+      HAInstanceType: m4.large
+    us-gov-east-1:
+      Hourly: ami-26d23f57
+      BYOL: ami-fcd4398d
+      ARN: aws-us-gov
+      HAInstanceType: m5.large
+    us-gov-west-1:
+      Hourly: ami-32cfe653
+      BYOL: ami-f9cbe298
+      ARN: aws-us-gov
+      HAInstanceType: m4.large
+    us-west-1:
+      Hourly: ami-052b7b926a954255d
+      BYOL: ami-03f1e4de99776a1c6
+      ARN: aws
+      HAInstanceType: m4.large
+    us-west-2:
+      Hourly: ami-0cbdbeeb79a41c94b
+      BYOL: ami-0f5acaa507d518862
+      ARN: aws
+      HAInstanceType: m4.large
+Conditions:
+  DetectAMI: !Equals 
+    - !Ref AMI
+    - autodetect
+  DetectInstanceSize: !Equals 
+    - !Ref InstanceSize
+    - default
+  TrustedPublicNetwork: !Not 
+    - !Equals 
+      - !Ref OptTrustedNetworkCIDR
+      - ''
+  AllocateElasticIP: !Equals 
+    - !Ref OptExistingElasticIpId
+    - ''
+Resources:
+  SecurityGroupPrivate:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Security Group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: '-1'
+          CidrIp: !Ref PrivateNetworkCIDR
+  SecurityGroupPublic:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Security Group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: !Ref PublicNetworkCIDR
+          FromPort: '4444'
+          ToPort: '4444'
+        - IpProtocol: tcp
+          CidrIp: !Ref PublicNetworkCIDR
+          FromPort: '4445'
+          ToPort: '5431'        
+  SecurityGroupTrusted:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Security Group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: '-1'
+          CidrIp: !Ref OptTrustedNetworkCIDR
+    Condition: TrustedPublicNetwork
+  PublicENI:
+    Type: 'AWS::EC2::NetworkInterface'
+    Properties:
+      SubnetId: !Ref PublicSubnetId
+      Description: ENI for Public Subnet
+      GroupSet:
+        - !If 
+          - TrustedPublicNetwork
+          - !Ref SecurityGroupTrusted
+          - !Ref SecurityGroupPublic
+        - !Ref SecurityGroupPublic
+      SourceDestCheck: 'false'
+      PrivateIpAddress: {IP for external int}
+  PrivateENI:
+    Type: 'AWS::EC2::NetworkInterface'
+    Properties:
+      SubnetId: !Ref PrivateSubnetId
+      Description: ENI for Private Subnet
+      GroupSet:
+        - !Ref SecurityGroupPrivate
+      SourceDestCheck: 'false'
+      PrivateIpAddress: {IP for internal int}
+  Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: SophosImage-1A
+      InstanceType: !If 
+        - DetectInstanceSize
+        - !FindInMap 
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - HAInstanceType
+        - !Ref InstanceSize
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref PublicENI
+          DeviceIndex: '0'
+        - NetworkInterfaceId: !Ref PrivateENI
+          DeviceIndex: '1'
+      ImageId: !If 
+        - DetectAMI
+        - !FindInMap 
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - !Ref LicenseType
+        - !Ref AMI
+  NewEIP:
+    Type: 'AWS::EC2::EIP'
+    Condition: AllocateElasticIP
+    Properties:
+      Domain: vpc
+  EIPAssociation:
+    Type: 'AWS::EC2::EIPAssociation'
+    Properties:
+      NetworkInterfaceId: !Ref PublicENI
+      AllocationId: !If 
+        - AllocateElasticIP
+        - !GetAtt 
+          - NewEIP
+          - AllocationId
+        - !Ref OptExistingElasticIpId
+Outputs:
+  URL:
+    Description: URL to the Gateway portal
+    Value: !Join 
+      - ''
+      - - 'https://'
+        - !GetAtt 
+          - Instance
+          - PublicIp
+        - ':4444'
+  Region:
+    Description: Region
+    Value: !Ref 'AWS::Region'    
+  PublicIP:
+    Description: External Ip
+    Value: !GetAtt Instance.PublicIp
+  PrivateIP:
+    Description: Instance External Ip
+    Value: !GetAtt Instance.PrivateIp
